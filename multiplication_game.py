@@ -5,7 +5,7 @@ from datetime import datetime
 from supabase import create_client, Client
 
 # ── Config ───────────────────────────────────────────────────────────────────
-TOTAL_QUESTIONS = 10
+TOTAL_QUESTIONS = 25
 MAX_LEADERS = 10
 
 st.set_page_config(page_title="Multiplication Blitz", page_icon="⏱️", layout="centered")
@@ -213,7 +213,7 @@ def advance_question(next_idx):
 # ── START SCREEN ──────────────────────────────────────────────────────────────
 if st.session_state.screen == "start":
     st.title("⏱️ Multiplication Blitz")
-    st.markdown("Answer **10 multiplication questions** as fast as you can. Wrong answers keep you on the same question until you get it right.")
+    st.markdown("Answer **25 multiplication questions** as fast as you can. Wrong answers keep you on the same question until you get it right.")
     st.divider()
 
     col1, col2 = st.columns(2)
