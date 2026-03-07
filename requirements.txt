@@ -1,6 +1,2 @@
 streamlit
-random
-time
-json
-os
-datetime
+supabase
