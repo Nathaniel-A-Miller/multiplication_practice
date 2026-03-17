@@ -80,8 +80,8 @@ def init_state():
         "start_time": None,
         "elapsed": None,
         "wrong_flash": False,
-        "penalty_flash": False,   # NEW: triggers the +5s penalty banner
-        "time_penalty": 0.0,      # NEW: accumulated penalty seconds
+        "penalty_flash": False,
+        "time_penalty": 0.0,
         "mc_options": [],
         "new_entry_rank": None,
         "leaderboard": None,
@@ -223,7 +223,7 @@ def render_leaderboard(lb, mode, highlight_rank=None, highlight_name=None):
 def advance_question(next_idx):
     if next_idx >= TOTAL_QUESTIONS:
         raw_elapsed = time.time() - st.session_state.start_time
-        elapsed = raw_elapsed + st.session_state.time_penalty   # NEW: add penalties
+        elapsed = raw_elapsed + st.session_state.time_penalty
         st.session_state.elapsed = elapsed
         lb = add_to_leaderboard(st.session_state.player_name, elapsed, st.session_state.mode)
         st.session_state.leaderboard = lb
@@ -239,9 +239,10 @@ def advance_question(next_idx):
 
 # ── START SCREEN ──────────────────────────────────────────────────────────────
 if st.session_state.screen == "start":
-    st.title("⏱️ Multiplication Blitz")
+    st.title("⏱️ Mixed Facts Lightning Round ⚡")
     st.markdown("Answer **25 multiplication questions** as fast as you can. Wrong answers keep you on the same question until you get it right.")
     st.markdown("⚠️ **Multiple Choice:** each wrong answer adds a **+5 second penalty** to your final time.")
+    st.markdown("👇If you're fast enough you get on the **LEADERBOARD**.👇")
     st.divider()
 
     col1, col2 = st.columns(2)
@@ -264,8 +265,8 @@ if st.session_state.screen == "start":
                 "start_time": time.time(),
                 "elapsed": None,
                 "wrong_flash": False,
-                "penalty_flash": False,   # NEW
-                "time_penalty": 0.0,      # NEW
+                "penalty_flash": False,
+                "time_penalty": 0.0,
                 "screen": "game",
             })
             if mode == "Multiple Choice":
@@ -291,7 +292,6 @@ elif st.session_state.screen == "game":
     q_idx = st.session_state.q_index
     a, b = st.session_state.questions[q_idx]
     correct = a * b
-    # NEW: display time includes accumulated penalty
     elapsed_now = time.time() - st.session_state.start_time + st.session_state.time_penalty
 
     st.markdown(f'<div class="timer-display">⏱️ {format_time(elapsed_now)}</div>', unsafe_allow_html=True)
@@ -299,7 +299,6 @@ elif st.session_state.screen == "game":
     st.progress(q_idx / TOTAL_QUESTIONS)
     st.markdown(f'<div class="big-problem">{a} × {b} = ?</div>', unsafe_allow_html=True)
 
-    # NEW: penalty flash takes priority and is shown above the wrong flash
     if st.session_state.penalty_flash:
         st.markdown('<div class="flash-penalty">⚠️ +5 SECOND PENALTY!</div>', unsafe_allow_html=True)
         st.session_state.penalty_flash = False
@@ -309,12 +308,22 @@ elif st.session_state.screen == "game":
 
     if st.session_state.mode == "Type":
         with st.form("answer_form", clear_on_submit=True):
-            answer_input = st.number_input("Your answer", step=1, value=0, label_visibility="collapsed")
+            # Blank text input — no prefilled 0, no stepper buttons
+            answer_input = st.text_input(
+                "Your answer",
+                placeholder="Type your answer...",
+                label_visibility="collapsed",
+            )
             submitted = st.form_submit_button("Submit", use_container_width=True, type="primary")
         if submitted:
-            if int(answer_input) == correct:
-                advance_question(q_idx + 1)
-            else:
+            try:
+                if int(answer_input.strip()) == correct:
+                    advance_question(q_idx + 1)
+                else:
+                    st.session_state.wrong_flash = True
+                    st.rerun()
+            except ValueError:
+                # Non-numeric input — treat as wrong answer
                 st.session_state.wrong_flash = True
                 st.rerun()
     else:
@@ -326,28 +335,20 @@ elif st.session_state.screen == "game":
                     if opt == correct:
                         advance_question(q_idx + 1)
                     else:
-                        # NEW: apply penalty and trigger penalty flash
                         st.session_state.time_penalty += MC_PENALTY_SECONDS
                         st.session_state.penalty_flash = True
                         st.rerun()
-
-    # Only auto-rerun (for live timer) in Type mode.
-    # MC mode must NOT auto-rerun — it causes duplicate button renders.
-    if st.session_state.mode == "Type":
-        time.sleep(0.5)
-        st.rerun()
 
 # ── RESULT SCREEN ─────────────────────────────────────────────────────────────
 elif st.session_state.screen == "result":
     elapsed = st.session_state.elapsed
     rank = st.session_state.new_entry_rank
     mode = st.session_state.mode
-    penalty = st.session_state.time_penalty   # NEW
+    penalty = st.session_state.time_penalty
 
     st.title("🎉 Round Complete!")
     st.markdown(f'<div class="result-time">{format_time(elapsed)}</div>', unsafe_allow_html=True)
 
-    # NEW: show penalty breakdown if any were incurred
     if penalty > 0:
         num_penalties = int(penalty / MC_PENALTY_SECONDS)
         st.markdown(
@@ -355,6 +356,9 @@ elif st.session_state.screen == "result":
             f'({format_time(penalty)} added)</div>',
             unsafe_allow_html=True
         )
+
+    if rank and rank <= MAX_LEADERS:
+        st.balloons()
 
     if rank == 1:
         st.markdown('<div class="result-rank">🥇 New #1 all-time! Incredible!</div>', unsafe_allow_html=True)
@@ -385,8 +389,8 @@ elif st.session_state.screen == "result":
                 "start_time": time.time(),
                 "elapsed": None,
                 "wrong_flash": False,
-                "penalty_flash": False,   # NEW
-                "time_penalty": 0.0,      # NEW
+                "penalty_flash": False,
+                "time_penalty": 0.0,
                 "screen": "game",
             })
             if st.session_state.mode == "Multiple Choice":
