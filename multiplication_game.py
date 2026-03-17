@@ -7,6 +7,7 @@ from supabase import create_client, Client
 # ── Config ───────────────────────────────────────────────────────────────────
 TOTAL_QUESTIONS = 25
 MAX_LEADERS = 10
+MC_PENALTY_SECONDS = 5
 
 st.set_page_config(page_title="Multiplication Blitz", page_icon="⏱️", layout="centered")
 
@@ -79,6 +80,8 @@ def init_state():
         "start_time": None,
         "elapsed": None,
         "wrong_flash": False,
+        "penalty_flash": False,   # NEW: triggers the +5s penalty banner
+        "time_penalty": 0.0,      # NEW: accumulated penalty seconds
         "mc_options": [],
         "new_entry_rank": None,
         "leaderboard": None,
@@ -127,12 +130,35 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     font-weight: 600;
     margin-bottom: 0.5rem;
 }
+.flash-penalty {
+    background: #ff4500;
+    border-radius: 12px;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    color: #ffffff;
+    font-size: 1.3rem;
+    font-weight: 900;
+    margin-bottom: 0.5rem;
+    letter-spacing: 1px;
+    animation: pulse 0.3s ease-in-out;
+}
+@keyframes pulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
 .result-time {
     font-size: 3.5rem;
     font-weight: 900;
     text-align: center;
     color: #e94560;
     margin: 0.5rem 0;
+}
+.result-penalty-note {
+    text-align: center;
+    font-size: 0.95rem;
+    color: #888;
+    margin-bottom: 0.5rem;
 }
 .result-rank {
     text-align: center;
@@ -196,7 +222,8 @@ def render_leaderboard(lb, mode, highlight_rank=None, highlight_name=None):
 
 def advance_question(next_idx):
     if next_idx >= TOTAL_QUESTIONS:
-        elapsed = time.time() - st.session_state.start_time
+        raw_elapsed = time.time() - st.session_state.start_time
+        elapsed = raw_elapsed + st.session_state.time_penalty   # NEW: add penalties
         st.session_state.elapsed = elapsed
         lb = add_to_leaderboard(st.session_state.player_name, elapsed, st.session_state.mode)
         st.session_state.leaderboard = lb
@@ -214,6 +241,7 @@ def advance_question(next_idx):
 if st.session_state.screen == "start":
     st.title("⏱️ Multiplication Blitz")
     st.markdown("Answer **25 multiplication questions** as fast as you can. Wrong answers keep you on the same question until you get it right.")
+    st.markdown("⚠️ **Multiple Choice:** each wrong answer adds a **+5 second penalty** to your final time.")
     st.divider()
 
     col1, col2 = st.columns(2)
@@ -236,6 +264,8 @@ if st.session_state.screen == "start":
                 "start_time": time.time(),
                 "elapsed": None,
                 "wrong_flash": False,
+                "penalty_flash": False,   # NEW
+                "time_penalty": 0.0,      # NEW
                 "screen": "game",
             })
             if mode == "Multiple Choice":
@@ -260,14 +290,19 @@ elif st.session_state.screen == "game":
     q_idx = st.session_state.q_index
     a, b = st.session_state.questions[q_idx]
     correct = a * b
-    elapsed_now = time.time() - st.session_state.start_time
+    # NEW: display time includes accumulated penalty
+    elapsed_now = time.time() - st.session_state.start_time + st.session_state.time_penalty
 
     st.markdown(f'<div class="timer-display">⏱️ {format_time(elapsed_now)}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="progress-label">Question {q_idx + 1} of {TOTAL_QUESTIONS}</div>', unsafe_allow_html=True)
     st.progress(q_idx / TOTAL_QUESTIONS)
     st.markdown(f'<div class="big-problem">{a} × {b} = ?</div>', unsafe_allow_html=True)
 
-    if st.session_state.wrong_flash:
+    # NEW: penalty flash takes priority and is shown above the wrong flash
+    if st.session_state.penalty_flash:
+        st.markdown('<div class="flash-penalty">⚠️ +5 SECOND PENALTY!</div>', unsafe_allow_html=True)
+        st.session_state.penalty_flash = False
+    elif st.session_state.wrong_flash:
         st.markdown('<div class="flash-wrong">✗ Not quite — try again!</div>', unsafe_allow_html=True)
         st.session_state.wrong_flash = False
 
@@ -290,7 +325,9 @@ elif st.session_state.screen == "game":
                     if opt == correct:
                         advance_question(q_idx + 1)
                     else:
-                        st.session_state.wrong_flash = True
+                        # NEW: apply penalty and trigger penalty flash
+                        st.session_state.time_penalty += MC_PENALTY_SECONDS
+                        st.session_state.penalty_flash = True
                         st.rerun()
 
     time.sleep(0.5)
@@ -301,9 +338,19 @@ elif st.session_state.screen == "result":
     elapsed = st.session_state.elapsed
     rank = st.session_state.new_entry_rank
     mode = st.session_state.mode
+    penalty = st.session_state.time_penalty   # NEW
 
     st.title("🎉 Round Complete!")
     st.markdown(f'<div class="result-time">{format_time(elapsed)}</div>', unsafe_allow_html=True)
+
+    # NEW: show penalty breakdown if any were incurred
+    if penalty > 0:
+        num_penalties = int(penalty / MC_PENALTY_SECONDS)
+        st.markdown(
+            f'<div class="result-penalty-note">Includes {num_penalties} × +5s penalty '
+            f'({format_time(penalty)} added)</div>',
+            unsafe_allow_html=True
+        )
 
     if rank == 1:
         st.markdown('<div class="result-rank">🥇 New #1 all-time! Incredible!</div>', unsafe_allow_html=True)
@@ -334,6 +381,8 @@ elif st.session_state.screen == "result":
                 "start_time": time.time(),
                 "elapsed": None,
                 "wrong_flash": False,
+                "penalty_flash": False,   # NEW
+                "time_penalty": 0.0,      # NEW
                 "screen": "game",
             })
             if st.session_state.mode == "Multiple Choice":
