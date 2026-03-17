@@ -275,15 +275,16 @@ if st.session_state.screen == "start":
             st.rerun()
 
     st.divider()
-    try:
-        lb = load_leaderboard()
-        c1, c2 = st.columns(2)
-        with c1:
-            render_leaderboard(lb, "Type")
-        with c2:
-            render_leaderboard(lb, "Multiple Choice")
-    except Exception:
-        st.info("Leaderboard unavailable — check your Supabase connection.")
+    with st.expander("🏆 View Leaderboard", expanded=False):
+        try:
+            lb = load_leaderboard()
+            c1, c2 = st.columns(2)
+            with c1:
+                render_leaderboard(lb, "Type")
+            with c2:
+                render_leaderboard(lb, "Multiple Choice")
+        except Exception:
+            st.info("Leaderboard unavailable — check your Supabase connection.")
 
 # ── GAME SCREEN ───────────────────────────────────────────────────────────────
 elif st.session_state.screen == "game":
@@ -330,8 +331,11 @@ elif st.session_state.screen == "game":
                         st.session_state.penalty_flash = True
                         st.rerun()
 
-    time.sleep(0.5)
-    st.rerun()
+    # Only auto-rerun (for live timer) in Type mode.
+    # MC mode must NOT auto-rerun — it causes duplicate button renders.
+    if st.session_state.mode == "Type":
+        time.sleep(0.5)
+        st.rerun()
 
 # ── RESULT SCREEN ─────────────────────────────────────────────────────────────
 elif st.session_state.screen == "result":
